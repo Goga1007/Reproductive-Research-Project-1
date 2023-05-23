@@ -1,0 +1,131 @@
+---
+title: "Project 1_RR"
+author: "Goga"
+date: "2023-05-23"
+output: html_document
+---
+##Assignment Instructions
+1.Code for reading in the dataset and/or processing the data
+2.Histogram of the total number of steps taken each day
+3.Mean and median number of steps taken each day
+4.Time series plot of the average number of steps taken
+5.The 5-minute interval that, on average, contains the maximum number of steps
+6.Code to describe and show a strategy for imputing missing data
+7.Histogram of the total number of steps taken each day after missing values are imputed
+8.Panel plot comparing the average number of steps taken per 5-minute interval across weekdays and weekends
+9.All of the R code needed to reproduce the results (numbers, plots, etc.) in the report
+
+##Step 1
+##Code for reading in the dataset and/or processing the data
+```{r, echo = TRUE}
+setwd("C:/Users/gogab/Documents/R Studio files/Reproductible research")
+activity <- read.csv("C:/Users/gogab/Documents/R Studio files/Reproductible research/repdata_data_activity/activity.csv")
+```
+
+Exploring the basics of this dataset "activity.csv"
+```{r}
+dim(activity)
+names(activity)
+head(activity)
+str(activity)
+#number of missing data
+sum(is.na(activity$steps))/dim(activity)[[1]]
+#transforming date format using lubridate
+library(lubridate)
+activity$date <- ymd(activity$date)
+length(unique(activity$date))
+```
+##Step 2
+##Histogram of the total number of steps taken each day
+##Step 3
+##Mean and median number of steps taken each day
+```{r, echo = TRUE}
+library(ggplot2)
+total.steps <- tapply(activity$steps, activity$date, FUN=sum, na.rm=TRUE)
+qplot(total.steps, binwidth = 1000, xlab = "total number of steps taken each day")
+dev.off()
+mean(total.steps, na.rm=TRUE)
+median(total.steps, na.rm=TRUE)
+```
+
+##Step 4
+##Time series plot of the average number of steps taken
+```{r, echo = TRUE}
+library(ggplot2)
+averages <- aggregate(x = list(steps = activity$steps), by = list(interval = activity$interval),
+                      FUN = mean, na.rm = TRUE)
+ggplot(data = averages, aes(x = interval, y = steps)) +
+    geom_line() +
+    xlab("5-minute interval") +
+    ylab("average number of steps taken")
+dev.off()
+```
+
+##Step 5
+##The 5-minute interval that, on average, contains the maximum number of step
+```{r, echo = TRUE}
+averages[which.max(averages$steps),]
+```
+
+
+##Step 6
+##Code to describe and show a strategy for imputing missing data.
+For the purpose I will use the mean/mode value substitution strategy to impute missing values. By using the mean values we'll substitute out the missing values in the original data set
+First, it is useful to know what are the distributions of missing values by date and interval.
+```{r how_many_missing}
+missing <- is.na(activity$steps)
+# How many missing
+table(missing)
+```
+
+All of the missing values are filled in with mean value for that 5-minute
+interval.
+
+```{r}
+# Replace each missing value with the mean value of its 5-minute interval
+fill.value <- function(steps, interval) {
+    filled <- NA
+    if (!is.na(steps))
+        filled <- c(steps)
+    else
+        filled <- (averages[averages$interval==interval, "steps"])
+    return(filled)
+}
+filled.data <- activity
+filled.data$steps <- mapply(fill.value, filled.data$steps, filled.data$interval)
+```
+## Step 7.
+## Histogram of the total number of steps taken each day after missing values are imputed
+
+```{r}
+total.steps <- tapply(filled.data$steps, filled.data$date, FUN=sum)
+qplot(total.steps, binwidth=1000, xlab="total number of steps taken each day")
+mean(total.steps)
+median(total.steps)
+dev.off()
+```
+
+Mean and median values are higher after imputing missing data. The reason is that in the original data, there are some days with `steps` values `NA` for any `interval`. The total number of steps taken in such days are set to 0s by default. 
+
+## Step 8
+## Panel plot comparing the average number of steps taken per 5-minute interval across weekdays and weekends
+```{r}
+weekday.or.weekend <- function(date) {
+    day <- weekdays(date)
+    if (day %in% c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday"))
+        return("weekday")
+    else if (day %in% c("Saturday", "Sunday"))
+        return("weekend")
+    else
+        stop("invalid date")
+}
+filled.data$date <- as.Date(filled.data$date)
+filled.data$day <- sapply(filled.data$date, FUN=weekday.or.weekend)
+```
+Plots of average number of steps taken on weekdays and weekends.
+```{r}
+averages <- aggregate(steps ~ interval + day, data = filled.data, mean)
+ggplot(averages, aes(interval, steps)) + geom_line() + facet_grid(day ~ .) +
+    xlab("5-minute interval") + ylab("Number of steps")
+dev.off()
+```
